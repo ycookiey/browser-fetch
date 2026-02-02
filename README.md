@@ -81,6 +81,7 @@ sequenceDiagram
 ```bash
 npm install -g agent-browser
 agent-browser install
+npm install -g @philschmid/clipper
 ```
 
 ## Installation
@@ -103,6 +104,7 @@ See [SKILL.md](./SKILL.md) for detailed usage patterns.
 - **Structured summaries**: Subagent returns page overview + key refs, not raw element lists
 - **Debug-friendly**: Raw data saved to `scratchpad/browser-session/` for troubleshooting
 - **Session persistence**: Browser state maintained across multiple operations
+- **Web Clip**: Convert any web page to clean Markdown via `clipper` (Readability + Turndown)
 
 ## License
 

@@ -1,6 +1,6 @@
 ---
 name: browser-fetch
-description: Delegate browser automation to a lightweight subagent (Haiku) to reduce context consumption. The subagent handles agent-browser operations and returns concise summaries instead of raw data.
+description: Delegate browser automation to a lightweight subagent (Haiku) to reduce context consumption. Also provides web clipping (HTML→Markdown) via clipper.
 ---
 
 # browser-fetch
@@ -21,6 +21,14 @@ Delegate browser automation to a cost-effective subagent, preserving the main ag
 npm install -g agent-browser
 agent-browser install
 ```
+
+### Install clipper
+
+```bash
+npm install -g @philschmid/clipper
+```
+
+Uses [Mozilla Readability](https://github.com/mozilla/readability) + [Turndown](https://github.com/mixmark-io/turndown) internally — same stack as Obsidian Web Clipper.
 
 ### Windows Workaround
 
@@ -198,3 +206,37 @@ Task(
   prompt: "Run: agent-browser close"
 )
 ```
+
+---
+
+## Web Clip (HTML → Markdown)
+
+Convert web pages to clean Markdown using `clipper`. No subagent needed — runs directly.
+
+### Basic Usage
+
+```bash
+clipper clip -u "https://example.com/article" -o scratchpad/browser-session/clip.md
+```
+
+This is the **preferred method**. Quality is equivalent to Obsidian Web Clipper (same Readability + Turndown stack).
+
+### Output Formats
+
+| Flag | Format |
+|------|--------|
+| `-f md` | Markdown (default) |
+| `-f json` | JSON (title, content, url) |
+
+### Batch Clipping
+
+```bash
+clipper crawl -u "https://docs.example.com" -g "https://docs.example.com/**/*" -o dataset.jsonl
+```
+
+### When to Use What
+
+| Scenario | Tool |
+|----------|------|
+| Read an article → Markdown | `clipper clip -u` |
+| Interact with a page (click, fill, navigate) | agent-browser + Haiku subagent |
