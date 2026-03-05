@@ -30,47 +30,64 @@ npm install -g @philschmid/clipper
 
 Uses [Mozilla Readability](https://github.com/mozilla/readability) + [Turndown](https://github.com/mixmark-io/turndown) internally — same stack as Obsidian Web Clipper.
 
-### Windows Workaround
+## Scripts
 
-On Windows (Git Bash), the daemon may not auto-start. Run manually:
+Helper scripts in `bin/` handle daemon startup, snapshots, and index.log automatically.
+
+| Script | Usage | Description |
+|--------|-------|-------------|
+| `open.sh` | `open.sh <url> <outdir> [nnn]` | Open URL + snapshot → `NNN.txt` (SPA/listing pages) |
+| `clip.sh` | `clip.sh <url> <outdir> [nnn]` | Clip URL → `NNN.md` (articles/docs) |
+| `batch-clip.sh` | `batch-clip.sh <urls_file> <outdir>` | Clip all URLs in file → multiple `NNN.md` |
+| `snap.sh` | `snap.sh <outdir> [nnn] [opts...]` | Snapshot only (after actions) → `NNN.txt` |
+| `close.sh` | `close.sh` | Close browser session |
+
+- `nnn` auto-increments if omitted (001, 002, ...)
+- Scripts print the output file path on stdout
+
+### Script Location
+
+The scripts are in `~/.claude/skills/browser-fetch/bin/`. Use the full path or set `SKILL_DIR`:
 
 ```bash
-node "$(npm root -g)/agent-browser/dist/daemon.js" &
-sleep 3
+SKILL_DIR="$HOME/.claude/skills/browser-fetch"
 ```
 
-## Basic Flow
+## Subagent Rules (Critical)
 
-```
-Main Agent                        Haiku Subagent
-    │                                   │
-    │  Task: "Open URL, summarize"      │
-    ├──────────────────────────────────►│
-    │                                   │  1. agent-browser open
-    │                                   │  2. snapshot → save to file
-    │                                   │  3. build summary
-    │   "Page summary + key refs"       │
-    │◄──────────────────────────────────┤
-    │                                   │
-    │  Task: "Click @e5, summarize"     │
-    ├──────────────────────────────────►│
-    │                                  ...
-```
+1. **ONLY execute scripts in `bin/`**. Do NOT run:
+   - `clipper` directly (use `clip.sh` or `batch-clip.sh`)
+   - `agent-browser` directly (use `open.sh`, `snap.sh`)
+   - Python scripts (NEVER create or execute `.py` files)
+   - Node.js scripts (NEVER create or execute `.js` files)
+2. **File writing**: Use ONLY bash builtins:
+   ```bash
+   # Good: echo/printf
+   echo "https://example.com" >> urls.txt
+   printf "%s\n" "$url" >> urls.txt
+   
+   # Bad: Python/Node
+   python3 -c "..."  # NEVER
+   ```
+3. **Max 1 retry**. If a command fails twice, report the error and stop.
+4. **Never return raw data**. Read the file, build a summary, return the summary only.
 
 ## Snapshot Options
 
-| Option | Use Case |
-|--------|----------|
-| `-i` | Interactive elements only (default) |
-| `-i -c` | Compact output (recommended for complex pages) |
-| `-i -d 2` | Limit depth (deeply nested pages) |
-| `-i -s "main"` | Scope to CSS selector |
+Pass extra options to `snap.sh` as trailing arguments:
 
-## Summary Format (Critical)
+```bash
+snap.sh "$OUTDIR" 002 -d 2        # Depth limit
+snap.sh "$OUTDIR" 002 -s "#content" # Scope to selector
+```
+
+If snapshot output exceeds token limits, retry with `-d 2`. If still too large, use `-s "main"`.
+
+## Summary Format
 
 Subagent must return **structured summaries**, not raw element lists.
 
-### Good Example
+### Good
 
 ```
 Product listing page (127 items displayed)
@@ -88,19 +105,17 @@ Ready for instructions.
 (debug: 001.txt)
 ```
 
-### Bad Example
+### Bad
 
 ```
 - @e1 Logo
 - @e2 Login button
 - @e3 Menu
-- @e4 Search
-- @e5 Footer
 ```
 
-→ No context. Main agent cannot make informed decisions.
+→ No context. Main agent cannot make decisions from this.
 
-## Invocation Template
+## Invocation Templates
 
 ### Opening a Page
 
@@ -109,29 +124,32 @@ Task(
   model: haiku,
   subagent_type: general-purpose,
   prompt: """
-  Use agent-browser to open {URL}.
+  Open a URL and return a structured summary.
 
-  Steps:
-  1. agent-browser open {URL}
-  2. agent-browser snapshot -i -c > scratchpad/browser-session/001.txt
-  3. Append to index.log: 001 | {time} | {URL} | {summary}
+  SKILL_DIR="$HOME/.claude/skills/browser-fetch"
+  OUTDIR="{OUTDIR}"
 
-  Return ONLY a structured summary:
-  - Page type and overview (e.g., "Login page", "Product list with 50 items")
-  - Key interactive elements with @refs
-  - Do NOT include raw snapshot data
+  ## Step 1: Run script
+  bash "$SKILL_DIR/bin/open.sh" "{URL}" "$OUTDIR"
 
-  Format:
-  {Page description}
+  ## Step 2: Read the snapshot file (path printed by the script)
+  ## Step 3: Return a structured summary (NOT raw data)
+
+  ## Rules
+  - If the script fails, retry ONCE. If it fails again, report the error and stop.
+  - Do NOT run any other commands.
+
+  ## Return format
+  {Page type and overview}
 
   Structure:
-  - {feature}: {description} (@ref)
+  - {section}: {description} (@refs)
 
   Key elements:
-  - {element description} (@ref)
+  - {element} (@ref)
 
   Ready for instructions.
-  (debug: 001.txt)
+  (debug: {NNN}.txt)
   """
 )
 ```
@@ -143,100 +161,219 @@ Task(
   model: haiku,
   subagent_type: general-purpose,
   prompt: """
-  Use agent-browser:
-  1. agent-browser fill @e1 "value"
-  2. agent-browser click @e3
-  3. agent-browser snapshot -i -c > scratchpad/browser-session/002.txt
-  4. Update index.log
+  Perform actions and take a snapshot.
 
-  Return structured summary only.
+  SKILL_DIR="$HOME/.claude/skills/browser-fetch"
+  OUTDIR="{OUTDIR}"
+
+  ## Step 1: Run action commands
+  agent-browser fill @e1 "value"   agent-browser click @e3 
+  ## Step 2: Take snapshot
+  bash "$SKILL_DIR/bin/snap.sh" "$OUTDIR"
+
+  ## Step 3: Read the snapshot file and return a structured summary
+
+  ## Rules
+  - If a command fails, retry ONCE. If it fails again, report the error and stop.
+  - Do NOT run any other commands.
+
+  ## Return format
+  Structured summary only. (debug: {NNN}.txt)
   """
 )
 ```
 
-### Complex Pages
-
-If snapshot exceeds limits, use additional constraints:
-
-```
-agent-browser snapshot -i -c -d 2 > file.txt   # Depth limit
-agent-browser snapshot -i -c -s "#content"     # Scope to selector
-```
-
-## Rules
-
-### Main Agent
-
-- Trust subagent summaries
-- Do NOT read raw files (scratchpad/browser-session/*.txt) unless debugging
-- Raw data is for troubleshooting only
-
-### Subagent
-
-- Always save snapshots to files (never return raw data)
-- Append to index.log for history
-- Use `--session` flag to maintain browser state
-- Return concise, structured summaries
-
-## File Structure
-
-```
-scratchpad/browser-session/
-├── index.log    # History (debug reference only)
-├── 001.txt      # Raw snapshot data
-├── 002.txt
-└── ...
-```
-
-### index.log Format
-
-```
-# browser-session index (debug only - do not read unless troubleshooting)
-
-001 | 14:23:45 | https://example.com/login     | Login form
-002 | 14:24:12 | https://example.com/dashboard | Dashboard with 5 widgets
-```
-
-## Ending Session
+### Ending Session
 
 ```
 Task(
   model: haiku,
   subagent_type: general-purpose,
-  prompt: "Run: agent-browser close"
+  prompt: """
+  bash "$HOME/.claude/skills/browser-fetch/bin/close.sh"
+  """
 )
+```
+
+## Main Agent Rules
+
+- **After reading this skill**, state your planned workflow to the user:
+  - Which scripts you will use
+  - How many Haiku tasks you expect
+  - What output files will be generated
+- Trust subagent summaries
+- **Do NOT read generated files** (`*.txt`, `*.md`) unless:
+  - The user explicitly asks to analyze content
+  - Debugging a specific issue
+  - Only read what is needed for the task (use `head`, `grep`, line ranges)
+- Replace `{OUTDIR}`, `{URL}` in templates before sending to subagent
+- `{OUTDIR}` = `scratchpad/browser-session` (project-relative or absolute)
+
+## Token-Efficient Patterns
+
+### Write-Only Mode (Recommended)
+
+Subagent writes results to file, returns only confirmation. Main agent reads file later if needed.
+
+```
+Task(
+  model: haiku,
+  prompt: """
+  Extract data and write to file. Do NOT return the data.
+
+  SKILL_DIR="$HOME/.claude/skills/browser-fetch"
+  OUTDIR="{OUTDIR}"
+  SUMMARY_FILE="$OUTDIR/summary.md"
+
+  ## Step 1: Actions
+  agent-browser click @e12
+  bash "$SKILL_DIR/bin/snap.sh" "$OUTDIR"
+
+  ## Step 2: Read snapshot, extract info, write to summary file
+  Write extracted data to $SUMMARY_FILE (append mode)
+
+  ## Step 3: Return ONLY
+  Done. Wrote to summary.md
+  """
+)
+```
+
+### Batch Processing
+
+Process multiple items in one subagent call. Write each result to file.
+
+```
+Task(
+  model: haiku,
+  prompt: """
+  Process multiple links and write results to file.
+
+  OUTDIR="{OUTDIR}"
+  RESULT_FILE="$OUTDIR/events.md"
+
+  For each ref in [@e12, @e13, @e14]:
+    1. agent-browser click {ref}
+    2. agent-browser get url
+    3. agent-browser snapshot -i -c
+    4. Extract: title, date, deadline, URL
+    5. Append to $RESULT_FILE
+
+  Return ONLY: Done. Processed 3 items.
+  """
+)
+```
+
+### Why This Matters
+
+| Pattern | Tokens Returned | Use Case |
+|---------|-----------------|----------|
+| Summary mode | ~100-500 | Need immediate decision |
+| Write-only | ~10-20 | Data collection, batch processing |
+| Return raw data | 1000-10000+ | Never do this |
+
+## File Structure
+
+```
+~/.claude/skills/browser-fetch/
+├── SKILL.md
+├── README.md
+└── bin/
+    ├── open.sh     # Open URL + snapshot (SPA/listing)
+    ├── clip.sh     # Clip URL to Markdown (articles/docs)
+    ├── snap.sh     # Snapshot only (after actions)
+    └── close.sh    # Close session
+
+scratchpad/browser-session/   (per-project, created at runtime)
+├── index.log
+├── 001.txt         # snapshot from open.sh/snap.sh
+├── 002.md          # clip from clip.sh
+└── ...
 ```
 
 ---
 
 ## Web Clip (HTML → Markdown)
 
-Convert web pages to clean Markdown using `clipper`. No subagent needed — runs directly.
+Convert article/content pages to clean Markdown.
 
-### Basic Usage
+- **Single URL**: Use `clip.sh`
+- **Multiple URLs**: Use `batch-clip.sh`
 
-```bash
-clipper clip -u "https://example.com/article" -o scratchpad/browser-session/clip.md
+> [!NOTE]
+> Internally uses Mozilla Readability (same as Obsidian Web Clipper).
+> Works best on article-like pages (blogs, docs, news).
+> May not work well on listing pages, dashboards, or SPAs.
+
+---
+
+## When to Use What
+
+| Page Type | Script | Reason |
+|-----------|--------|--------|
+| **Listing / index page** | `open.sh` / `snap.sh` | Structure exploration, link extraction |
+| **Dashboard / SPA** | `open.sh` / `snap.sh` | Requires JS execution, interaction |
+| **Single article / detail page** | `clip.sh` | Clean Markdown, no AI cost |
+| **Multiple detail pages** | `batch-clip.sh` | Batch convert URLs to Markdown |
+
+### Typical Workflow: List → Detail (Token-Efficient)
+
+#### Haiku Task 1: Extract URLs from Listing Page
+
+```
+Task(
+  model: haiku,
+  prompt: """
+  Extract detail page URLs from listing page.
+
+  SKILL_DIR="$HOME/.claude/skills/browser-fetch"
+  OUTDIR="{OUTDIR}"
+  URLS_FILE="$OUTDIR/urls.txt"
+
+  ## Step 1: Take snapshot
+  bash "$SKILL_DIR/bin/snap.sh" "$OUTDIR"
+
+  ## Step 2: Read snapshot, extract detail page URLs
+  Write each URL (one per line) to $URLS_FILE
+
+  ## Step 3: Return ONLY
+  Done. Extracted {N} URLs to urls.txt
+  (debug: {NNN}.txt)
+  """
+)
 ```
 
-This is the **preferred method**. Quality is equivalent to Obsidian Web Clipper (same Readability + Turndown stack).
+#### Haiku Task 2: Batch Clip All URLs
 
-### Output Formats
+```
+Task(
+  model: haiku,
+  prompt: """
+  Batch clip all URLs to Markdown.
 
-| Flag | Format |
-|------|--------|
-| `-f md` | Markdown (default) |
-| `-f json` | JSON (title, content, url) |
+  SKILL_DIR="$HOME/.claude/skills/browser-fetch"
+  OUTDIR="{OUTDIR}"
 
-### Batch Clipping
+  ## Step 1: Run batch clip
+  bash "$SKILL_DIR/bin/batch-clip.sh" "$OUTDIR/urls.txt" "$OUTDIR"
 
-```bash
-clipper crawl -u "https://docs.example.com" -g "https://docs.example.com/**/*" -o dataset.jsonl
+  ## Step 2: Return ONLY the script output
+  """
+)
 ```
 
-### When to Use What
+#### Main Agent: Read Generated Markdown
 
-| Scenario | Tool |
-|----------|------|
-| Read an article → Markdown | `clipper clip -u` |
-| Interact with a page (click, fill, navigate) | agent-browser + Haiku subagent |
+After Task 2 completes, read the generated `.md` files to analyze/summarize.
+
+```
+Haiku Task 1              Haiku Task 2              Main Agent
+    │                         │                         │
+    │ snap.sh → extract URLs  │                         │
+    │ → urls.txt              │                         │
+    ├────────────────────────►│                         │
+                              │ batch-clip.sh           │
+                              │ → 001.md, 002.md, ...   │
+                              ├────────────────────────►│
+                                                        │ Read .md files
+                                                        │ Analyze/summarize
+```

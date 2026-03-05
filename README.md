@@ -2,6 +2,16 @@
 
 A Claude Code skill that delegates browser automation to a lightweight subagent, reducing context consumption by 90%+.
 
+## Scripts
+
+| Script | Description |
+|--------|-------------|
+| `open.sh` | URLを開いてスナップショット取得 → `NNN.txt`（SPA/リスト向け） |
+| `clip.sh` | URLをMarkdownに変換 → `NNN.md`（記事/ドキュメント向け） |
+| `snap.sh` | 現在のページのスナップショット取得（アクション後に使用） |
+| `close.sh` | ブラウザセッションを終了 |
+| `common.sh` | 共通関数（内部使用） |
+
 ## Problem
 
 [agent-browser](https://github.com/vercel-labs/agent-browser) snapshots can consume 10,000+ tokens on complex pages, quickly exhausting your context window.
