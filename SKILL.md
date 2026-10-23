@@ -358,7 +358,7 @@ Task(
   OUTDIR="{OUTDIR}"
 
   ## Step 1: Clip each URL (batch-clip.sh currently stops after the first URL)
-  n=1; while IFS= read -r url; do [ -n "$url" ] && bash "$SKILL_DIR/bin/clip.sh" "$url" "$OUTDIR" "$(printf %03d "$n")"; n=$((n+1)); done < "$OUTDIR/urls.txt"
+  while IFS= read -r url || [ -n "$url" ]; do [ -n "$url" ] && bash "$SKILL_DIR/bin/clip.sh" "$url" "$OUTDIR"; done < "$OUTDIR/urls.txt"
 
   ## Step 2: Return ONLY the script output
   """
@@ -376,7 +376,7 @@ Haiku Task 1              Haiku Task 2              Main Agent
     │ → urls.txt              │                         │
     ├────────────────────────►│                         │
                               │ clip.sh per URL         │
-                              │ → 001.md, 002.md, ...   │
+                              │ → NNN.md per URL        │
                               ├────────────────────────►│
                                                         │ Read .md files
                                                         │ Analyze/summarize
