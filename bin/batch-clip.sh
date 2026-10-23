@@ -5,8 +5,8 @@
 # Examples:
 #   batch-clip.sh urls.txt ./scratchpad/browser-session
 #
-# Input file format: one URL per line
-# Output: NNN.md files for each URL
+# Input file: one URL per line. Blank lines and lines starting with # are skipped.
+# Output: one NNN.md file per URL
 
 set -euo pipefail
 
@@ -25,10 +25,8 @@ SUCCESS_COUNT=0
 FAIL_COUNT=0
 
 while IFS= read -r URL || [[ -n "$URL" ]]; do
-  # Skip empty lines and comments
   [[ -z "$URL" || "$URL" =~ ^# ]] && continue
 
-  # Auto-determine NNN
   LAST=$(ls "$OUTDIR"/*.md "$OUTDIR"/*.txt 2>/dev/null | sed 's/.*\///' | sed 's/\.\(md\|txt\)//' | grep -E '^[0-9]+$' | sort -n | tail -1 || true)
   if [[ -n "$LAST" ]]; then
     NNN=$(printf "%03d" $(( 10#$LAST + 1 )))

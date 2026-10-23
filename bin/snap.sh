@@ -17,7 +17,6 @@ OUTDIR="${1:?Usage: snap.sh <outdir> [nnn] [snapshot-opts...]}"
 
 mkdir -p "$OUTDIR"
 
-# Auto-determine NNN if not provided
 if [[ -n "${2:-}" ]]; then
   NNN="$2"
 else
@@ -32,16 +31,13 @@ fi
 OUTFILE="$OUTDIR/$NNN.txt"
 INDEXLOG="$OUTDIR/index.log"
 
-# Extra snapshot options (from 3rd argument onward)
 SNAP_OPTS=("${@:3}")
 
 ensure_daemon
 
-# Take snapshot
 echo "[snap] Taking snapshot -> $OUTFILE ..." >&2
 run_with_retry agent-browser snapshot -i -c "${SNAP_OPTS[@]}" > "$OUTFILE"
 
-# Update index.log
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 echo "$NNN | $TIMESTAMP | snapshot | after action" >> "$INDEXLOG"
 

@@ -16,7 +16,6 @@ OUTDIR="${2:?Usage: open.sh <url> <outdir> [nnn]}"
 
 mkdir -p "$OUTDIR"
 
-# Auto-determine NNN if not provided
 if [[ -n "${3:-}" ]]; then
   NNN="$3"
 else
@@ -33,15 +32,12 @@ INDEXLOG="$OUTDIR/index.log"
 
 ensure_daemon
 
-# Open URL
 echo "[open] Opening $URL ..." >&2
 run_with_retry agent-browser open "$URL"
 
-# Take snapshot
 echo "[open] Taking snapshot -> $OUTFILE ..." >&2
 run_with_retry agent-browser snapshot -i -c > "$OUTFILE"
 
-# Update index.log
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 echo "$NNN | $TIMESTAMP | $URL | opened" >> "$INDEXLOG"
 
