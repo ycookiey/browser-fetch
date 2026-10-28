@@ -49,9 +49,9 @@ The files go to the folder Claude passes to the scripts. `SKILL.md` suggests `sc
 ## Limitations
 
 - The scripts are written for Windows with Git Bash. They use GNU sed and need Bash 4.4 or later. With the bash and sed that come with macOS, the automatic file numbering and `snap.sh` don't work. Linux is untested.
-- The check in `bin/common.sh` that starts the agent-browser daemon was written for agent-browser 0.8 on Windows. It hasn't been checked against newer agent-browser releases.
+- The skill was written for agent-browser 0.8 on Windows. Newer agent-browser releases haven't been checked.
 - `clip.sh` and `batch-clip.sh` download the page directly, not through the browser. They don't run JavaScript or send the browser's cookies, so pages that need a login or render with JavaScript come out empty or incomplete. Use `open.sh` for those.
-- `batch-clip.sh` currently stops after the first URL in the list, because its success counter returns a non-zero status under `set -e`. Until this is fixed, run `clip.sh` once per URL.
+- `batch-clip.sh` currently stops after the first URL in the list. Until this is fixed, run `clip.sh` once per URL.
 - Snapshots and clips hold whatever the page shows, including pages you are logged in to. If the output folder is inside a git repository, add it to `.gitignore`.
 
 ## Uninstall
