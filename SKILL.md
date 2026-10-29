@@ -9,9 +9,9 @@ Delegate browser automation to a cost-effective subagent, preserving the main ag
 
 ## Why This Skill?
 
-- **Problem**: `agent-browser snapshot` can consume 10,000+ tokens on complex pages
-- **Solution**: Haiku subagent processes snapshots and returns only summaries (~100 tokens)
-- **Result**: 90%+ context reduction while maintaining full browser capabilities
+- **Problem**: `agent-browser snapshot` output can be very large on complex pages
+- **Solution**: Haiku subagent processes snapshots and returns only short summaries
+- **Result**: The main agent's context stays small while keeping full browser capabilities
 
 ## Prerequisites
 
@@ -28,7 +28,7 @@ agent-browser install
 npm install -g @philschmid/clipper
 ```
 
-Uses [Mozilla Readability](https://github.com/mozilla/readability) + [Turndown](https://github.com/mixmark-io/turndown) internally — same stack as Obsidian Web Clipper.
+Uses [Mozilla Readability](https://github.com/mozilla/readability) + [Turndown](https://github.com/mixmark-io/turndown) internally.
 
 ## Scripts
 
@@ -167,7 +167,9 @@ Task(
   OUTDIR="{OUTDIR}"
 
   ## Step 1: Run action commands
-  agent-browser fill @e1 "value"   agent-browser click @e3 
+  agent-browser fill @e1 "value"
+  agent-browser click @e3
+
   ## Step 2: Take snapshot
   bash "$SKILL_DIR/bin/snap.sh" "$OUTDIR"
 
@@ -278,10 +280,12 @@ Task(
 ├── SKILL.md
 ├── README.md
 └── bin/
-    ├── open.sh     # Open URL + snapshot (SPA/listing)
-    ├── clip.sh     # Clip URL to Markdown (articles/docs)
-    ├── snap.sh     # Snapshot only (after actions)
-    └── close.sh    # Close session
+    ├── open.sh        # Open URL + snapshot (SPA/listing)
+    ├── clip.sh        # Clip URL to Markdown (articles/docs)
+    ├── batch-clip.sh  # Clip all URLs in a file to Markdown
+    ├── snap.sh        # Snapshot only (after actions)
+    ├── close.sh       # Close session
+    └── common.sh      # Shared functions (sourced by open.sh/snap.sh)
 
 scratchpad/browser-session/   (per-project, created at runtime)
 ├── index.log
@@ -297,10 +301,10 @@ scratchpad/browser-session/   (per-project, created at runtime)
 Convert article/content pages to clean Markdown.
 
 - **Single URL**: Use `clip.sh`
-- **Multiple URLs**: Use `batch-clip.sh`
+- **Multiple URLs**: Run `clip.sh` once per URL. `batch-clip.sh` currently stops after the first URL
 
 > [!NOTE]
-> Internally uses Mozilla Readability (same as Obsidian Web Clipper).
+> Internally uses Mozilla Readability.
 > Works best on article-like pages (blogs, docs, news).
 > May not work well on listing pages, dashboards, or SPAs.
 
@@ -313,7 +317,7 @@ Convert article/content pages to clean Markdown.
 | **Listing / index page** | `open.sh` / `snap.sh` | Structure exploration, link extraction |
 | **Dashboard / SPA** | `open.sh` / `snap.sh` | Requires JS execution, interaction |
 | **Single article / detail page** | `clip.sh` | Clean Markdown, no AI cost |
-| **Multiple detail pages** | `batch-clip.sh` | Batch convert URLs to Markdown |
+| **Multiple detail pages** | `clip.sh` per URL | `batch-clip.sh` currently stops after the first URL |
 
 ### Typical Workflow: List → Detail (Token-Efficient)
 
@@ -348,13 +352,13 @@ Task(
 Task(
   model: haiku,
   prompt: """
-  Batch clip all URLs to Markdown.
+  Clip each URL to Markdown.
 
   SKILL_DIR="$HOME/.claude/skills/browser-fetch"
   OUTDIR="{OUTDIR}"
 
-  ## Step 1: Run batch clip
-  bash "$SKILL_DIR/bin/batch-clip.sh" "$OUTDIR/urls.txt" "$OUTDIR"
+  ## Step 1: Clip each URL (batch-clip.sh currently stops after the first URL)
+  while IFS= read -r url || [ -n "$url" ]; do [ -n "$url" ] && bash "$SKILL_DIR/bin/clip.sh" "$url" "$OUTDIR"; done < "$OUTDIR/urls.txt"
 
   ## Step 2: Return ONLY the script output
   """
@@ -371,8 +375,8 @@ Haiku Task 1              Haiku Task 2              Main Agent
     │ snap.sh → extract URLs  │                         │
     │ → urls.txt              │                         │
     ├────────────────────────►│                         │
-                              │ batch-clip.sh           │
-                              │ → 001.md, 002.md, ...   │
+                              │ clip.sh per URL         │
+                              │ → NNN.md per URL        │
                               ├────────────────────────►│
                                                         │ Read .md files
                                                         │ Analyze/summarize

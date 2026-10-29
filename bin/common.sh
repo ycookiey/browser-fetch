@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# common.sh — Common functions for browser-fetch scripts
+# common.sh — Functions sourced by open.sh and snap.sh
 
-# Ensure daemon is running (with retry on failure)
 ensure_daemon() {
   local npm_root
   npm_root="$(npm root -g)"
 
-  # Check if daemon is already running by testing the port
+  # 50838 is the TCP port of agent-browser's daemon for the default session on Windows.
+  # Git Bash has no nc, so fall back to PowerShell.
   if nc -z 127.0.0.1 50838 2>/dev/null || (command -v powershell &>/dev/null && powershell -NoProfile -Command "(Test-NetConnection -ComputerName 127.0.0.1 -Port 50838 -WarningAction SilentlyContinue).TcpTestSucceeded" 2>/dev/null | grep -qi true); then
     return 0
   fi
@@ -16,7 +16,6 @@ ensure_daemon() {
   sleep 3
 }
 
-# Try command with retry on daemon failure
 run_with_retry() {
   local output
   local exit_code

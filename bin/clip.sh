@@ -5,9 +5,6 @@
 # Examples:
 #   clip.sh "https://example.com/article" ./scratchpad/browser-session
 #   clip.sh "https://example.com/article" ./scratchpad/browser-session 001
-#
-# Note: clipper only works on article-like pages (blog, docs, news).
-#       For SPAs, dashboards, or listing pages, use open.sh instead.
 
 set -euo pipefail
 
@@ -16,11 +13,10 @@ OUTDIR="${2:?Usage: clip.sh <url> <outdir> [nnn]}"
 
 mkdir -p "$OUTDIR"
 
-# Auto-determine NNN if not provided
 if [[ -n "${3:-}" ]]; then
   NNN="$3"
 else
-  # Check both .md and .txt files for consistent numbering
+  # open.sh and snap.sh write .txt into the same folder, so count both to keep one sequence
   LAST=$(ls "$OUTDIR"/*.md "$OUTDIR"/*.txt 2>/dev/null | sed 's/.*\///' | sed 's/\.\(md\|txt\)//' | grep -E '^[0-9]+$' | sort -n | tail -1 || true)
   if [[ -n "$LAST" ]]; then
     NNN=$(printf "%03d" $(( 10#$LAST + 1 )))
@@ -35,7 +31,6 @@ INDEXLOG="$OUTDIR/index.log"
 echo "[clip] Clipping $URL -> $OUTFILE ..." >&2
 clipper clip -u "$URL" -o "$OUTFILE"
 
-# Update index.log
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 echo "$NNN | $TIMESTAMP | $URL | clipped" >> "$INDEXLOG"
 
